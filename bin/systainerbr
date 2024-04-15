@@ -1,0 +1,26 @@
+#!/bin/bash
+# update interface names as necessary
+ctname=$(cat ./ctname.txt)
+
+read -rp "What is the name of the bridged connection (ex: br0):
+" bridge
+
+if [[ ! -d /etc/systemd/nspawn ]]; then
+	mkdir -p /etc/systemd/nspawn/
+fi
+
+{ echo "[Network]" ; echo "Bridge=${bridge}" ; } > "/etc/systemd/nspawn/${ctname}.nspawn"
+
+{ echo "[Match]" ; echo "Name=host0*" ; echo ; echo "[Link]" ; echo "ARP=true" ; echo ; echo "[Network]" ; echo "DHCP=yes" ; echo "LinkLocalAddressing=yes" ; echo "IPv6AcceptRA=yes" ; echo ; echo "[IPv6AcceptRA]" ; echo "UseOnLinkPrefix=true" ; echo "UseAutonomousPrefix=true" ; } > "/var/lib/machines/${ctname}/etc/systemd/network/20-host0.network"
+
+echo "Now booting container: ${ctname}
+
+While in the container, ensure to enable and start systemd-networkd and
+systemd-resolved. Confirm resolv.conf is a symlink (not a file) as well as, enter a valid hostname/FQDN via hostnamectl set-hostname.
+"
+read -rp "Press Enter/Return when ready.
+"
+systemd-nspawn -D "/var/lib/machines/${ctname}"  -b
+unset ctname
+sudo rm ./ctname.txt
+

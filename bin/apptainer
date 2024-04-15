@@ -1,0 +1,35 @@
+#!/bin/bash
+if [ "${EUID}" -ne 0 ]; then
+	echo "Please run as root..."
+	sleep 2 && exit
+fi
+ctname=$(cat ./ctname.txt)
+
+if [[ ! -d /etc/systemd/nspawn ]]; then
+mkdir -p /etc/systemd/nspawn/
+fi
+
+{ echo "[Exec]"; echo "PrivateUsers=false"; echo ; echo "[Network]"; echo "Private=off"; echo "VirtualEthernet=false"; } > "/etc/systemd/nspawn/${ctname}.nspawn"
+
+echo -e "Make sure to disable systemd-networkd & systemd-resolved.
+When inside the container, after logging in as root with the
+password created in the previous step, paste the next few lines:
+
+systemctl disable systemd-networkd && systemctl disable systemd-resolved
+systemctl stop systemd-networkd systemd-resolved
+rm /etc/resolv.conf && {
+echo 'nameserver 127.0.0.53'; echo 'options edns0 trust-ad';
+} >> /etc/resolv.conf
+
+After doing so, ${ctname} can be shutdown or at least restarted via
+'shutdown now' or 'reboot'.
+"
+read -rp 'Press Enter When Ready... '
+
+systemd-nspawn -b -D "/var/lib/machines/${ctname}"
+
+echo "Enjoy your new container! See 'man machinectl' for guidance
+on controlling it from here. "
+unset ctname
+sudo rm ./ctname.txt
+sleep 9

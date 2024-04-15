@@ -1,0 +1,92 @@
+#!/bin/bash
+# update interface names as necessary
+ctname=$(cat ./ctname.txt)
+
+read -rp "This is a fairly manual process, but we'll get through it together. What is the name of the network interface we'll use for macvlan? (ex: enp1s0f0)
+ " mvtap
+read -rp "What is the IP address to use for this network in CIDR notation (ex: 192.168.1.2/24)?
+ " mvip
+read -rp "The Gateway IP address for this network? (ex: 192.168.1.1)
+ " mvgate;
+read -rp "Is there is a virtual lan/bridge set up for internal use/access? (if not, access 
+is only available on this host via 'systemd-nspawn' or 'machinectl' commands) [y|n]
+ " brexist
+
+if [[ ! -d /etc/systemd/nspawn ]]; then
+	mkdir -p /etc/systemd/nspawn/
+fi
+touch "/etc/systemd/nspawn/${ctname}.nspawn"
+
+if [[ "${brexist}" = [yY] ]]; then 
+	"${brtee}"
+	else 
+	"${macv}"
+fi
+
+macv=$({ 
+echo "[Network]"; echo "MACVLAN=${mvtap}"; } >> "/etc/systemd/nspawn/${ctname}.nspawn"
+
+tee> "/var/lib/machines/${ctname}/etc/systemd/network/10-mv.network" <<EOF
+[Match]
+Name=mv-enp*
+
+[Link]
+ARP=True
+
+[Network]
+DHCP=no
+Address=${mvip}
+Gateway=${mvgate}
+IPv6AcceptRA=True
+
+[IPv6AcceptRA]
+UseOnLinkPrefix=False
+UseAutonomousPrefix=False
+EOF
+)
+
+brtee=$(read -rp "Interface name of the internal lan/bridge network (ex: virbr0)?
+ " bridge
+read -rp "What is the internal IP address to use for this network in CIDR notation?
+ " bridgeip
+
+{ echo "[Network]"; echo "MACVLAN=${mvtap}"; echo "Bridge=${bridge}";
+} >> "/etc/systemd/nspawn/${ctname}.nspawn"
+
+tee> "/var/lib/machines/${ctname}/etc/systemd/network/20-host0.network" <<EOF
+[Match]
+Name=host0*
+
+[Network]
+DHCP=no
+Address=${bridgeip}
+
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+EOF
+"${macv}"
+)
+
+echo "Now booting container: ${ctname}
+
+While inside the container, log in as root with the password you just created. Start and enable systemd-networkd and systemd-resolved:
+systemctl enable --now systemd-networkd
+systemctl enable --now systemd-resolved
+
+Confirm resolv.conf is a symlink (not a file) with proper
+permissions:
+ls -al /etc/resolv.conf
+
+Enter a valid hostname/FQDN:
+hostnamectl set-hostname <container.domain.tld>
+
+Once complete, exit the container by executing CTRL+]]]
+Then you should be able to use 'machinectl' to start, enable, and log into it! (See 'man machinectl' for usage info)
+ "
+read -rp "Press Enter/Return when ready.
+ "
+systemd-nspawn -D "/var/lib/machines/${ctname}"  -b
+
+unset ctname
+sudo rm ./ctname.txt
+exit

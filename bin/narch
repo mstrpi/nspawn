@@ -1,0 +1,44 @@
+#!/bin/bash
+if [ "${EUID}" -ne 0 ]; then
+	echo "Please run as root..."
+	sleep 2 && exit
+fi
+read -rp "Name for the container: " ctname
+
+echo "${ctname}" > ./ctname.txt
+
+if [[ ! -d /var/lib/machines ]]; then
+	mkdir -p /var/lib/machines/
+fi
+
+sudo btrfs subvolume create /var/lib/machines/"${ctname}"
+sudo pacstrap -K -c /var/lib/machines/"${ctname}" base
+sudo setenforce 0
+
+echo "use following commands inside $ctname:
+
+passwd
+pacman-key --init
+pacman-key --populate
+
+There will be more to do after, but 'shutdown now' after the
+previous steps are done.
+"
+read -r "enter when ready
+"
+systemd-nspawn -bD /var/lib/machines/"$ctname"
+
+read -rp "How would you like to proceed?
+(A) Create an application container
+(B) Commission a system container over a bridge
+(C) Set up system container using macvlan" ctype
+
+case $ctype in
+	[aA] )
+		/usr/local/bin/apptainer;;
+	[bB] )
+		/usr/local/bin/systainerbr;;
+	* )
+		/usr/local/bin/systainermv;;
+esac
+exit

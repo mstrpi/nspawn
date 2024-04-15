@@ -1,0 +1,8 @@
+#!/bin/bash
+if [ "${EUID}" -ne 0 ]; then
+	echo "Please run as root..."
+	sleep 2 && exit
+fi
+read -rp "Name of machine to disable SELinux from? " ctname
+semanage fcontext -a -t systemd_machined_var_lib_t "/var/lib/machines/${ctname}(/.*)?"
+restorecon -RF "/var/lib/machines/${ctname}"
