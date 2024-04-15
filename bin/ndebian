@@ -1,0 +1,38 @@
+#!/bin/bash
+# systemd-nspawn for debian base containers
+# feel free to update list of programs to install inside the container
+if [ "${EUID}" -ne 0 ]; then
+	echo "Please run as root..."
+	sleep 2 && exit
+fi
+read -rp "Name for the container: " ctname
+
+echo "${ctname}" > ./ctname.txt
+
+if [[ ! -d /var/lib/machines ]]; then
+	mkdir -p /var/lib/machines/
+fi
+
+btrfs subvolume create /var/lib/machines/"${ctname}"
+debootstrap --include=dbus-broker,systemd-container,systemd,systemd-resolved,util-linux,passwd,nano,curl,wget,sudo,lsof,vim,man-db,telnet,rsyslog,tar,acl --components=main stable /var/lib/machines/"${ctname}" https://deb.debian.org/debian
+
+setenforce 0 2>&1
+systemd-nspawn -D /var/lib/machines/"${ctname}" passwd
+setenforce 1 2>&1
+
+read -rp "How would you like to proceed?
+(A) Create an application container
+(B) Commission a system container over a bridge
+(C) Set up system container using macvlan
+" ctype
+
+case $ctype in
+	[aA] )
+		/usr/local/bin/apptainer;;
+	[bB] )
+		/usr/local/bin/systainerbr;;
+	* )
+		/usr/local/bin/systainermv;;
+esac
+
+exit
